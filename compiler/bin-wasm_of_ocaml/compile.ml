@@ -483,7 +483,9 @@ let run
   List.iter static_env ~f:(fun (s, v) -> Eval.set_static_env s v);
   let t = Timer.make () in
   let include_dirs =
-    List.filter_map (include_dirs @ [ "+stdlib/" ]) ~f:(fun d -> Findlib.find [] d)
+    List.filter_map
+      (include_dirs @ if Config.Flag.playbit () then [] else [ "+stdlib/" ])
+      ~f:(fun d -> Findlib.find [] d)
   in
   let exported_unit =
     match export_file with
