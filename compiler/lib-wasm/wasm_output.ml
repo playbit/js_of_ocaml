@@ -690,7 +690,7 @@ end = struct
         output_byte ch 0x0B
     | Try (typ, l, catches) ->
         Feature.require exception_handling;
-        if Config.Flag.wasi ()
+        if Config.Flag.standalone_host ()
         then (
           output_byte ch 0x1f;
           output_blocktype st.type_names ch typ;

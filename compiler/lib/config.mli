@@ -89,6 +89,10 @@ module Flag : sig
 
   val wasi : unit -> bool
 
+  val playbit : unit -> bool
+
+  val standalone_host : unit -> bool
+
   val enable : string -> unit
 
   val disable : string -> unit

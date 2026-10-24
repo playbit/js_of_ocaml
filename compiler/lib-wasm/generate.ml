@@ -367,7 +367,7 @@ module Generate (Target : Target_sig.S) = struct
         (if negate then Arith.( <> ) else Arith.( = ))
           (Conv.shift (transl_prim_arg ctx ~typ:(Int Unnormalized) x))
           (Conv.shift (transl_prim_arg ctx ~typ:(Int Unnormalized) y))
-    | Top, Top when not (int_only || Config.Flag.wasi ()) ->
+    | Top, Top when not (int_only || Config.Flag.standalone_host ()) ->
         Value.js_eqeqeq
           ~negate
           (transl_prim_arg ctx ~typ:Top x)

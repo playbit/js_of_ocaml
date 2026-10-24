@@ -596,7 +596,7 @@ let ocaml_version =
   Scanf.sscanf Sys.ocaml_version "%d.%d.%d" (fun major minor patchlevel ->
       Version (major, minor, patchlevel))
 
-let default_settings = [ "name-wasm-functions", Bool true ]
+let default_settings = [ "name-wasm-functions", Bool true; "playbit", Bool false ]
 
 let f ~variables ~filename ~contents:text =
   let variables =

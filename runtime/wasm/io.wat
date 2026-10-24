@@ -1268,6 +1268,18 @@
       (if (struct.get $channel $unbuffered (local.get $ch))
          (then (call $caml_flush (local.get $ch)))))
 
+(@if $playbit
+(@then
+   ;; Retain the ordinary channel representation and registry during Stdlib
+   ;; initialization. A flush may succeed only when no output is pending.
+   (func $caml_ml_flush (export "caml_ml_flush")
+      (param $vch (ref eq)) (result (ref eq))
+      (if (struct.get $channel $curr (ref.cast (ref $channel) (local.get $vch)))
+         (then
+            (call $caml_raise_sys_error (@string "Playbit stdio is unsupported; use the SDK log call"))))
+      (ref.i31 (i32.const 0)))
+)
+(@else
    (func $caml_ml_flush (export "caml_ml_flush")
       (param $vch (ref eq)) (result (ref eq))
       (local $ch (ref $channel))
@@ -1275,6 +1287,8 @@
       (if (i32.ne (struct.get $channel $fd (local.get $ch)) (i32.const -1))
          (then (call $caml_flush (local.get $ch))))
       (ref.i31 (i32.const 0)))
+
+))
 
 (@if $wasi
 (@then

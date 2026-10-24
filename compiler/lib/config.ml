@@ -126,6 +126,10 @@ module Flag = struct
   let toplevel = o ~name:"toplevel" ~default:false
 
   let wasi = o ~name:"wasi" ~default:false
+
+  let playbit = o ~name:"playbit" ~default:false
+
+  let standalone_host () = wasi () || playbit ()
 end
 
 module Param = struct

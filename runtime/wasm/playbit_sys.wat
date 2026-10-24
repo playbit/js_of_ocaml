@@ -1,0 +1,17 @@
+;; Host-independent Sys initialization. Unsupported operations remain unresolved.
+(module
+    (type $bytes (array (mut i8)))
+    (type $block (array (mut (ref eq))))
+    (@string $name "playbit")
+    (func (export "caml_sys_argv") (param (ref eq)) (result (ref eq))
+        (array.new_fixed $block 2 (ref.i31 (i32.const 0)) (global.get $name)))
+    (func (export "caml_sys_executable_name") (param (ref eq)) (result (ref eq))
+        (global.get $name))
+    (func (export "caml_sys_const_bigendian") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 0)))
+    (func (export "caml_sys_const_word_size") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 32)))
+    (func (export "caml_sys_const_int_size") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 31)))
+    (func (export "caml_sys_const_max_wosize") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 0xfffffff)))
+    (func (export "caml_sys_const_ostype_unix") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 0)))
+    (func (export "caml_sys_const_ostype_win32") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 0)))
+    (func (export "caml_sys_const_ostype_cygwin") (param (ref eq)) (result (ref eq)) (ref.i31 (i32.const 0)))
+)

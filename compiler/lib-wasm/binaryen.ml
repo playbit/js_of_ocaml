@@ -146,11 +146,13 @@ let optimize
        the runtime [.wat] files still use the legacy [try]/[catch] syntax,
        and this flag converts them to [try_table] so the whole output is
        uniformly in the new form. *)
-    (("wasm-opt" :: (if Config.Flag.wasi () then [ "--emit-exnref" ] else []))
+    (("wasm-opt" :: (if Config.Flag.standalone_host () then [ "--emit-exnref" ] else []))
     @ common_options ()
     @ (match options with
       | Some o -> o
-      | None -> optimization_options profile)
+      | None ->
+          List.filter (optimization_options profile) ~f:(fun option ->
+              not (Config.Flag.playbit () && String.equal option "--traps-never-happen")))
     @ [ Filename.quote input_file; "-o"; Filename.quote output_file ]
     @ opt_flag "--input-source-map" opt_input_sourcemap
     @ opt_flag "--output-source-map" opt_output_sourcemap)

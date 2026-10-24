@@ -73,6 +73,7 @@ type t =
   ; no_cmis : bool
   ; export_file : string option
   ; fs_files : string list
+  ; target : [ `Default | `Playbit ]
   }
 
 let set_param =
@@ -103,6 +104,12 @@ let set_env =
     & info [ "setenv" ] ~docv:"PARAM=VALUE" ~doc)
 
 let toplevel_section = "OPTIONS (TOPLEVEL)"
+
+let host_target =
+  Arg.(
+    value
+    & opt (enum [ "default", `Default; "playbit", `Playbit ]) `Default
+    & info [ "target" ] ~docv:"HOST" ~doc:"Select the standalone Playbit host target.")
 
 let options () =
   let filesystem_section = "OPTIONS (FILESYSTEM)" in
@@ -220,7 +227,8 @@ let options () =
       effects
       shape_files
       build_config
-      apply_build_config =
+      apply_build_config
+      target =
     let chop_extension s = try Filename.chop_extension s with Invalid_argument _ -> s in
     let common =
       if toplevel
@@ -257,7 +265,11 @@ let options () =
         let static_env : (string * string) list = List.flatten set_env in
         let enable_source_maps = (not no_sourcemap) && sourcemap in
         let include_dirs = normalize_include_dirs include_dirs in
-        let effects = normalize_effects effects common in
+        let effects =
+          match target, effects with
+          | `Playbit, None -> `Cps
+          | _, _ -> normalize_effects effects common
+        in
         `Ok
           { common
           ; params
@@ -279,6 +291,7 @@ let options () =
           ; no_cmis
           ; export_file
           ; fs_files
+          ; target
           }
   in
   let t =
@@ -305,7 +318,8 @@ let options () =
       $ effects
       $ shape_files
       $ build_config
-      $ apply_build_config)
+      $ apply_build_config
+      $ host_target)
   in
   Term.ret t
 
@@ -409,6 +423,7 @@ let options_runtime_only () =
       ; dynlink = false
       ; no_cmis = false
       ; export_file = None
+      ; target = `Default
       ; fs_files = []
       }
   in

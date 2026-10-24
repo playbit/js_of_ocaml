@@ -88,7 +88,7 @@ let preprocessor_variables () =
            | (`Disabled | `Jspi | `Cps | `Native) as e -> e
            | `Double_translation -> assert false)
         |> Build_info.string_of_effects_backend) )
-  ; "wasi", Wat_preprocess.Bool (Config.Flag.wasi ())
+  ; "wasi", Wat_preprocess.Bool (Config.Flag.standalone_host ())
   ]
 
 let with_runtime_files ~runtime_wasm_files f =
@@ -101,15 +101,20 @@ let with_runtime_files ~runtime_wasm_files f =
 
 let build_runtime ~runtime_file =
   let variables = preprocessor_variables () in
+  let variables =
+    if Config.Flag.playbit ()
+    then ("playbit", Wat_preprocess.Bool true) :: variables
+    else variables
+  in
   match
     List.find_opt Runtime_files.precompiled_runtimes ~f:(fun (flags, _) ->
-        assert (List.length flags = List.length variables);
-        List.equal
-          ~eq:(fun (k1, v1) (k2, v2) ->
-            assert (String.equal k1 k2);
-            Wat_preprocess.value_equal v1 v2)
-          flags
-          variables)
+        List.length flags = List.length variables
+        && List.equal
+             ~eq:(fun (k1, v1) (k2, v2) ->
+               assert (String.equal k1 k2);
+               Wat_preprocess.value_equal v1 v2)
+             flags
+             variables)
   with
   | Some (_, contents) -> Fs.write_file ~name:runtime_file ~contents
   | None ->
@@ -124,26 +129,46 @@ let build_runtime ~runtime_file =
             ; file = module_name ^ ".wat"
             ; source = Contents contents
             })
-          (if Config.Flag.wasi ()
-           then ("libc", Runtime_files.wasi_libc) :: Runtime_files.wat_files
-           else Runtime_files.wat_files @ Runtime_files.wasm_files)
+          (if Config.Flag.playbit ()
+           then
+             List.filter_map Runtime_files.wat_files ~f:(fun (name, contents) ->
+                 if List.mem ~eq:String.equal name [ "sys"; "wasi_memory" ]
+                 then None
+                 else
+                   Some
+                     ( (match name with
+                       | "playbit_sys" -> "sys"
+                       | _ -> name)
+                     , contents ))
+           else if Config.Flag.wasi ()
+           then
+             ("libc", Runtime_files.wasi_libc)
+             :: List.filter Runtime_files.wat_files ~f:(fun (name, _) ->
+                 not (List.mem ~eq:String.equal name [ "playbit"; "playbit_sys" ]))
+           else
+             List.filter Runtime_files.wat_files ~f:(fun (name, _) ->
+                 not (List.mem ~eq:String.equal name [ "playbit"; "playbit_sys" ]))
+             @ Runtime_files.wasm_files)
       in
       Runtime.build
         ~link_options:[ "-g" ]
         ~opt_options:[ "-g"; "-O2" ]
         ~variables
         ~allowed_imports:
-          (Some
-             (if Config.Flag.wasi ()
-              then [ "wasi_snapshot_preview1"; "OCaml" ]
-              else
-                [ "bindings"
-                ; "Math"
-                ; "js"
-                ; "wasm:js-string"
-                ; "wasm:text-encoder"
-                ; "wasm:text-decoder"
-                ]))
+          (if Config.Flag.playbit ()
+           then None
+           else
+             Some
+               (if Config.Flag.wasi ()
+                then [ "wasi_snapshot_preview1"; "OCaml" ]
+                else
+                  [ "bindings"
+                  ; "Math"
+                  ; "js"
+                  ; "wasm:js-string"
+                  ; "wasm:text-encoder"
+                  ; "wasm:text-decoder"
+                  ]))
         ~inputs
         ~output_file:runtime_file
 
@@ -227,7 +252,12 @@ let link_and_optimize
     let primitives =
       Binaryen.dead_code_elimination
         ~dependencies:
-          (if Config.Flag.wasi ()
+          (if Config.Flag.playbit ()
+           then
+             {j|[{"name":"root","reaches":["main","memory"],"root":true},
+                  {"name":"main","export":"pb_main"},
+                  {"name":"memory","export":"memory"}]|j}
+           else if Config.Flag.wasi ()
            then Runtime_files.wasi_dependencies
            else Runtime_files.dependencies)
         ~opt_input_sourcemap:opt_temp_sourcemap
@@ -408,9 +438,13 @@ let run
     ; no_cmis
     ; export_file
     ; fs_files
+    ; target
     } =
   Config.set_target `Wasm;
   Jsoo_cmdline.Arg.eval common;
+  (match target with
+  | `Default -> ()
+  | `Playbit -> Config.Flag.enable "playbit");
   Config.set_effects_backend effects;
   Jsoo_cmdline.Build_config.process
     `Wasm
@@ -420,6 +454,16 @@ let run
      also picked up when it comes through [--apply-build-config] (e.g. when dune
      compiles the library dependencies of a toplevel). *)
   let toplevel = Config.Flag.toplevel () in
+  if Config.Flag.playbit ()
+  then (
+    if Config.Flag.wasi () || dynlink || toplevel || runtime_only || enable_source_maps
+    then
+      failwith
+        "Playbit requires a standalone program without WASI, dynlink, toplevel or source \
+         maps";
+    match Config.effects () with
+    | `Cps -> ()
+    | _ -> failwith "Playbit requires --effects cps");
   Generate.init ();
   List.iter shape_files ~f:(fun s ->
       let z = Zip.open_in s in
@@ -517,6 +561,7 @@ let run
        js_of_ocaml, this is done in each compilation unit, so that it also
        works with separate compilation. *)
     let code = Code.prepend one.code (env_instr ()) in
+    if Config.Flag.playbit () then Primitive.register_named_value "playbit.turn";
     let ( Driver.
             { program
             ; variable_uses
@@ -725,48 +770,68 @@ let run
          in
          if binaryen_times ()
          then Format.eprintf " link_and_optimize: %a@." Timer.print t2;
-         let wasm_name =
-           if Config.Flag.wasi ()
-           then "code"
-           else
-             Printf.sprintf
-               "code-%s"
-               (String.sub (Digest.to_hex (Digest.file tmp_wasm_file)) ~pos:0 ~len:20)
-         in
-         let tmp_wasm_file' = Filename.concat tmp_dir (wasm_name ^ ".wasm") in
-         Sys.rename tmp_wasm_file tmp_wasm_file';
-         if enable_source_maps
+         if Config.Flag.playbit ()
          then (
-           Sys.rename (Filename.concat tmp_dir "code.wasm.map") (tmp_wasm_file' ^ ".map");
-           Link.Wasm_binary.append_source_map_section
-             ~file:tmp_wasm_file'
-             ~url:(wasm_name ^ ".wasm.map"));
-         if times () then Format.eprintf "Start building js runtime@.";
-         let js_runtime =
-           let missing_primitives =
-             let l = Link.Wasm_binary.read_imports ~file:tmp_wasm_file' in
-             List.filter_map
-               ~f:(fun { Link.Wasm_binary.module_; name; _ } ->
-                 if String.equal module_ "env" then Some name else None)
-               l
+           let imports = Link.Wasm_binary.read_imports ~file:tmp_wasm_file in
+           List.iter imports ~f:(fun { Link.Wasm_binary.module_; name; desc } ->
+               if
+                 not
+                   (String.equal module_ "playbit"
+                   && String.equal name "pb_syscall"
+                   &&
+                   match desc with
+                   | Func _ -> true
+                   | _ -> false)
+               then
+                 failwith
+                   (Printf.sprintf "unsupported Playbit primitive: %s.%s" module_ name));
+           Fs.gen_file output_file (fun output ->
+               Fs.write_file ~name:output ~contents:(Fs.read_file tmp_wasm_file)))
+         else
+           let wasm_name =
+             if Config.Flag.wasi ()
+             then "code"
+             else
+               Printf.sprintf
+                 "code-%s"
+                 (String.sub (Digest.to_hex (Digest.file tmp_wasm_file)) ~pos:0 ~len:20)
            in
-           build_js_runtime
-             ~primitives
-             ~runtime_arguments:
-               (Link.build_runtime_arguments
-                  ~missing_primitives
-                  ~wasm_dir:dir
-                  ~link_spec:[ wasm_name, None ]
-                  ~separate_compilation:false
-                  ~generated_js:[ None, generated_js ]
-                  ~embedded_files
-                  ())
-             ()
-         in
-         Fs.gen_file output_file
-         @@ fun tmp_output_file ->
-         Fs.write_file ~name:tmp_output_file ~contents:js_runtime
+           let tmp_wasm_file' = Filename.concat tmp_dir (wasm_name ^ ".wasm") in
+           Sys.rename tmp_wasm_file tmp_wasm_file';
+           if enable_source_maps
+           then (
+             Sys.rename (Filename.concat tmp_dir "code.wasm.map") (tmp_wasm_file' ^ ".map");
+             Link.Wasm_binary.append_source_map_section
+               ~file:tmp_wasm_file'
+               ~url:(wasm_name ^ ".wasm.map"));
+           if times () then Format.eprintf "Start building js runtime@.";
+           let js_runtime =
+             let missing_primitives =
+               let l = Link.Wasm_binary.read_imports ~file:tmp_wasm_file' in
+               List.filter_map
+                 ~f:(fun { Link.Wasm_binary.module_; name; _ } ->
+                   if String.equal module_ "env" then Some name else None)
+                 l
+             in
+             build_js_runtime
+               ~primitives
+               ~runtime_arguments:
+                 (Link.build_runtime_arguments
+                    ~missing_primitives
+                    ~wasm_dir:dir
+                    ~link_spec:[ wasm_name, None ]
+                    ~separate_compilation:false
+                    ~generated_js:[ None, generated_js ]
+                    ~embedded_files
+                    ())
+               ()
+           in
+           Fs.gen_file output_file
+           @@ fun tmp_output_file ->
+           Fs.write_file ~name:tmp_output_file ~contents:js_runtime
      | `Cmo cmo ->
+         if Config.Flag.playbit ()
+         then failwith "Playbit requires a linked bytecode executable";
          Fs.gen_file output_file
          @@ fun tmp_output_file ->
          let z = Zip.open_out tmp_output_file in
@@ -790,6 +855,8 @@ let run
          Link.add_info z ~build_info:(Build_info.create `Cmo) ~unit_data ();
          Zip.close_out z
      | `Cma cma ->
+         if Config.Flag.playbit ()
+         then failwith "Playbit requires a linked bytecode executable";
          Fs.gen_file output_file
          @@ fun tmp_output_file ->
          let z = Zip.open_out tmp_output_file in

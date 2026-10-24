@@ -470,6 +470,12 @@
       (call $caml_main (ref.func $reraise_exception)))
 ))
 
+(@if $playbit
+(@then
+   (func $caml_main (export "caml_main") (param $start (ref func))
+      (drop (call_ref $thunk (ref.cast (ref $thunk) (local.get $start)))))
+)
+(@else
    (func $caml_main (export "caml_main") (param $start (ref func))
       (local $exn (ref eq))
       (local $msg (ref eq))
@@ -516,6 +522,8 @@
 ))
             )
             (call $exit (i32.const 2)))))
+
+))
 
    (func (export "caml_with_async_exns") (param $f (ref eq)) (result (ref eq))
       (return_call $caml_callback_1 (local.get $f) (ref.i31 (i32.const 0))))

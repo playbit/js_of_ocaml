@@ -1396,8 +1396,8 @@ module Math = struct
   let unary name x =
     let* f =
       register_import
-        ~allow_tail_call:(Config.Flag.wasi ())
-        ~import_module:(if Config.Flag.wasi () then "env" else "Math")
+        ~allow_tail_call:(Config.Flag.standalone_host ())
+        ~import_module:(if Config.Flag.standalone_host () then "env" else "Math")
         ~name
         (Fun (float_func_type 1))
     in
@@ -1445,8 +1445,8 @@ module Math = struct
   let binary name x y =
     let* f =
       register_import
-        ~allow_tail_call:(Config.Flag.wasi ())
-        ~import_module:(if Config.Flag.wasi () then "env" else "Math")
+        ~allow_tail_call:(Config.Flag.standalone_host ())
+        ~import_module:(if Config.Flag.standalone_host () then "env" else "Math")
         ~name
         (Fun (float_func_type 2))
     in
@@ -1479,7 +1479,7 @@ module Bigarray = struct
     return (W.StructGet (Some U, ty, 4, a))
 
   let little_endian () =
-    if Config.Flag.wasi ()
+    if Config.Flag.standalone_host ()
     then Arith.(const 1l)
     else
       let* le =
@@ -1534,11 +1534,11 @@ module Bigarray = struct
     let* little_endian = little_endian () in
     let* f =
       register_import
-        ~import_module:(if Config.Flag.wasi () then "env" else "bindings")
+        ~import_module:(if Config.Flag.standalone_host () then "env" else "bindings")
         ~name
         (Fun
            { W.params =
-               Ref { nullable = not (Config.Flag.wasi ()); typ = Extern }
+               Ref { nullable = not (Config.Flag.standalone_host ()); typ = Extern }
                :: I32
                :: (if size = 0 then [] else [ I32 ])
            ; result = [ typ ]
@@ -1615,11 +1615,11 @@ module Bigarray = struct
     let* little_endian = little_endian () in
     let* f =
       register_import
-        ~import_module:(if Config.Flag.wasi () then "env" else "bindings")
+        ~import_module:(if Config.Flag.standalone_host () then "env" else "bindings")
         ~name
         (Fun
            { W.params =
-               Ref { nullable = not (Config.Flag.wasi ()); typ = Extern }
+               Ref { nullable = not (Config.Flag.standalone_host ()); typ = Extern }
                :: I32
                :: typ
                :: (if size = 0 then [] else [ I32 ])
@@ -2041,7 +2041,7 @@ let handle_exceptions ~result_typ ~fall_through ~context body x exn_handler =
          x
          (block_expr
             { params = []; result = [ Type.value ] }
-            (if Config.Flag.wasi ()
+            (if Config.Flag.standalone_host ()
              then
                let* e =
                  try_expr

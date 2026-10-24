@@ -483,7 +483,7 @@ let expression_or_instructions ctx st in_function =
             @ [ List (Atom "else" :: expression iff) ])
         ]
     | Try (ty, body, catches) ->
-        if Config.Flag.wasi ()
+        if Config.Flag.standalone_host ()
         then
           [ List
               (Atom "try_table"
