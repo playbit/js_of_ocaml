@@ -1,5 +1,9 @@
 # Js_of_ocaml (jsoo)
 
+This fork adds the [Playbit host target](runtime/wasm/PLAYBIT.md) to
+`wasm_of_ocaml`. Upstream development is at
+[ocsigen/js_of_ocaml](https://github.com/ocsigen/js_of_ocaml).
+
 [![Build js_of_ocaml](https://github.com/ocsigen/js_of_ocaml/actions/workflows/js_of_ocaml.yml/badge.svg)](https://github.com/ocsigen/js_of_ocaml/actions/workflows/js_of_ocaml.yml)
 [![Build wasm_of_ocaml](https://github.com/ocsigen/js_of_ocaml/actions/workflows/wasm_of_ocaml.yml/badge.svg)](https://github.com/ocsigen/js_of_ocaml/actions/workflows/wasm_of_ocaml.yml)
 [![Update Web site - build](https://github.com/ocsigen/js_of_ocaml/actions/workflows/siteupdate.yml/badge.svg)](https://github.com/ocsigen/js_of_ocaml/actions/workflows/siteupdate.yml)

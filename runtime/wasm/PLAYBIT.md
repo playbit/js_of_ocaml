@@ -9,7 +9,7 @@ Its only permitted host import is `playbit.pb_syscall`, a function with paramete
 `i32, i64, i64, i64, i64, i64, i64` and one `i64` result. The Playbit runtime also
 validates that exact signature when linking. The compiler runtime owns no opcode
 table; applications supply generated scalar calls and OCaml buffer adapters as
-primitive modules at link time. The current SDK lives in Archipelago's `ocaml/`.
+primitive modules at link time. The Playbit SDK supplies these bindings.
 
 ```mermaid
 sequenceDiagram
@@ -41,9 +41,9 @@ heap; it must not allow a guest that trapped to resume.
 
 WASI, Dynlink, separate compilation, a toplevel and source maps are currently
 rejected for this target. Unsupported reachable imports are link errors rather
-than ambient host access. Package replacement creates a new heap. The native
-OCaml REPL experiment is independent of this Wasm target.
+than ambient host access. Package replacement creates a new heap.
 
-From Archipelago, `gmake -C ocaml wasm-test` exercises generated bindings, entry
-state, exceptions, integer widths, buffers and actual Playbit backends. The
-browser compatibility harness uses the production Playbit browser adapters.
+In a Playbit source checkout, `gmake -C playbit/sdk/ocaml wasm-test` exercises
+generated bindings, entry state, exceptions, integer widths, buffers and actual
+Playbit backends. The browser compatibility harness uses the production Playbit
+browser adapters.
